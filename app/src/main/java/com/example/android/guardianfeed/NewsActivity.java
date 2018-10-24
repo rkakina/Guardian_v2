@@ -1,5 +1,7 @@
 package com.example.android.guardianfeed;
 
+import android.content.SharedPreferences;
+import android.preference.PreferenceManager;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 
@@ -11,6 +13,10 @@ import android.content.Loader;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
+import android.text.TextUtils;
+import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ListView;
@@ -22,12 +28,12 @@ import java.util.List;
 public class NewsActivity extends AppCompatActivity
         implements LoaderCallbacks<List<News>> {
 
-    /**
-     * URL for news articles from the TheGuardian API
-     */
-    private static final String GUARDIAN_REQUEST_URL =
-            "https://content.guardianapis.com/search?section=technology&from-date=2018-01-01&order-by=newest&show-tags=contributor&q=tesla&api-key=c899a59e-1839-4a73-8f58-3572a77876b8";
+    private static final String LOG_TAG = QueryUtils.class.getSimpleName();
 
+    /**
+     * URL for news articles from the TheGuardian API, shortened to be later appended when turned into URI
+     */
+    private static final String GUARDIAN_REQUEST_URL = "https://content.guardianapis.com/search";
 
     private static final int NEWS_LOADER_ID = 1; //Constant for NewsLoader ID.
 
@@ -107,9 +113,47 @@ public class NewsActivity extends AppCompatActivity
     }
 
     @Override
+    // onCreateLoader instantiates and returns a new Loader for the given ID
     public Loader<List<News>> onCreateLoader(int i, Bundle bundle) {
-        // Create a new loader for the given URL
-        return new NewsLoader(this, GUARDIAN_REQUEST_URL);
+
+        SharedPreferences sharedPrefs = PreferenceManager.getDefaultSharedPreferences(this);
+
+        // This gets the search preference.
+        String search = sharedPrefs.getString(
+                getString(R.string.settings_search_key),
+                getString(R.string.settings_search_default));
+
+        // This gets the order preference.
+        String orderBy  = sharedPrefs.getString(
+                getString(R.string.settings_order_by_key),
+                getString(R.string.settings_order_by_default));
+
+        //This gets the section preference.
+        String section = sharedPrefs.getString(
+                getString(R.string.settings_section_key),
+                getString(R.string.settings_section_default));
+
+        // parse breaks apart the URI string that's passed into its parameter
+        Uri baseUri = Uri.parse(GUARDIAN_REQUEST_URL);
+
+        // buildUpon prepares the baseUri that we just parsed so we can add query parameters to it
+        Uri.Builder uriBuilder = baseUri.buildUpon();
+
+        //Constructs the query to be passed to TheGuardian.
+        //Includes section only if specified by user. If not, retrieves articles from all sections.
+        if(!TextUtils.isEmpty(section)) {
+            uriBuilder.appendQueryParameter("section", section);
+        }
+        uriBuilder.appendQueryParameter("from-date", "2018-01-01");
+        uriBuilder.appendQueryParameter("order-by", orderBy);
+        uriBuilder.appendQueryParameter("show-tags", "contributor");
+        uriBuilder.appendQueryParameter("q", search);
+        uriBuilder.appendQueryParameter("api-key", "c899a59e-1839-4a73-8f58-3572a77876b8");
+
+        //Checks the URL that was constructed.
+        Log.i(LOG_TAG,uriBuilder.toString());
+        return new NewsLoader(this, uriBuilder.toString());
+
     }
 
     @Override
@@ -136,5 +180,24 @@ public class NewsActivity extends AppCompatActivity
     public void onLoaderReset(Loader<List<News>> loader) {
         // Loader reset, so we can clear out our existing data.
         mAdapter.clear();
+    }
+
+    //Creates the menu
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.main, menu);
+        return true;
+    }
+
+    //Loads the settings activity when it is selected by the user
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        int id = item.getItemId();
+        if (id == R.id.action_settings) {
+            Intent settingsIntent = new Intent(this, SettingsActivity.class);
+            startActivity(settingsIntent);
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
     }
 }
